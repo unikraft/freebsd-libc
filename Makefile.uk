@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Authors: Lord Daniell
+#
+# Copyright (c) 2025, Unikraft GmbH and The Unikraft Authors.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and a
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+################################################################################
+# TCB (Thread Control Block) Reservation
+#
+# This reserves space within Unikraft's Thread-Local Storage (TLS) area for
+# the `pthread` structure used by FreeBSD's threading implementation. This is
+# a critical step for compatibility with Unikraft's scheduler.
+################################################################################
+ifeq ($(CONFIG_LIBFREEBSD),y)
+$(eval $(call ukarch_tls_tcb_reserve,200))
+endif
+
+################################################################################
+# Library Registration
+#
+# Registers the FreeBSD libc libraries with the Unikraft build system.
+# We use two separate libraries to control the linking order:
+#  - libfreebsdsymbols: Contains syscall redirections and stubs.
+#  - libfreebsd: Contains the actual FreeBSD libc source code.
+# This ensures that our syscall redirections are linked first.
+################################################################################
+$(eval $(call addlib_s,libfreebsdsymbols,$(CONFIG_LIBFREEBSD)))
+$(eval $(call addlib_s,libfreebsd,$(CONFIG_LIBFREEBSD)))
+
+################################################################################
+# Source and Include Paths
+#
+# Defines the paths to the FreeBSD libc source code and include directories.
+################################################################################
+LIBFREEBSD_LIBC_SRC := $(LIBFREEBSD_BASE)/src
+
+# Internal FreeBSD libc includes
+LIBFREEBSD_COMPFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/include
+LIBFREEBSD_COMPFLAGS-y += -I$(LIBFREEBSD_BASE)/freebsd-include
+LIBFREEBSD_COMPFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/locale
+LIBFREEBSD_COMPFLAGS-y += -I$(UK_BASE)/lib/uksched/include
+
+# Make FreeBSD system headers available for applications
+LIBFREEBSD_GLOBAL_INCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include
+LIBFREEBSD_GLOBAL_INCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/machine/amd64
+LIBFREEBSD_GLOBAL_INCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/sys
+LIBFREEBSD_GLOBAL_INCLUDES-y += -I$(UK_BASE)/lib/uksched/include
+
+# System-wide includes when FreeBSD libc is selected
+# Essential compiler headers must be available globally for platform code
+CINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include
+CINCLUDES-y += -I$(UK_BASE)/lib/uksched/include
+CXXINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include
+
+# Additional FreeBSD libc headers for applications only
+LIBFREEBSD_ACINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/machine/amd64
+LIBFREEBSD_ACINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/sys
+LIBFREEBSD_ACXXINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/machine/amd64
+LIBFREEBSD_ACXXINCLUDES-y += -I$(LIBFREEBSD_BASE)/freebsd-include/sys
+
+################################################################################
+# Global Compiler Flags
+#
+# These flags are applied to all source files in the FreeBSD libc library.
+################################################################################
+LIBFREEBSD_CFLAGS-y += -D__UNIKRAFT__
+LIBFREEBSD_CFLAGS-y += -DFREEBSD_LIBC_INTEGRATION
+LIBFREEBSD_CFLAGS-y += -Wno-unused-parameter
+LIBFREEBSD_CFLAGS-y += -Wno-sign-compare
+LIBFREEBSD_CFLAGS-y += -ffreestanding
+
+# CRITICAL: Force-include the compatibility header BEFORE all other headers.
+# This ensures that our definitions and workarounds are applied first.
+LIBFREEBSD_CFLAGS-y += -include $(LIBFREEBSD_BASE)/glue/freebsd_compat.h
+
+# CRITICAL: Include constant verification to ensure ABI compatibility.
+LIBFREEBSD_CFLAGS-y += -include $(LIBFREEBSD_BASE)/glue/constant_verification.h
+
+################################################################################
+# Source File Selection
+#
+# This section selects the source files to be compiled as part of the
+# FreeBSD libc library. The selection is minimal to reduce the footprint and
+# avoid pulling in unnecessary dependencies.
+################################################################################
+
+# Core memory and string manipulation functions
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memchr.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memcmp.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memcpy.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memmove.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memset.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memrchr.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlen.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strchr.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strchrnul.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strrchr.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcmp.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncmp.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcpy.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncpy.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcat.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncat.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strnlen.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlcat.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlcpy.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcspn.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strspn.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strpbrk.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strstr.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bcmp.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bcopy.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bzero.c
+
+# Core standard library functions
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/atoi.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/atol.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/abs.c
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/labs.c
+
+################################################################################
+# Glue Code
+#
+# This section includes the glue code that provides the compatibility layer
+# between FreeBSD libc and Unikraft.
+################################################################################
+
+# CRITICAL: Syscall redirection layer
+LIBFREEBSDSYMBOLS_SRCS-y += $(LIBFREEBSD_BASE)/glue/syscall_redirect.c
+
+# CRITICAL: TCB (Thread Control Block) and TLS implementation
+LIBFREEBSD_SRCS-y += $(LIBFREEBSD_BASE)/glue/tls.c

@@ -1,0 +1,1 @@
+../../freebsd-src/include/xlocale/_langinfo.h
