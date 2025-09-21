@@ -1,0 +1,314 @@
+# SPDX-License-Identifier: BSD-3-Clause
+#
+#
+# Copyright (c) 2025, Unikraft GmbH and The Unikraft Authors.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT of THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+# Main menuconfig option for FreeBSD libc
+menuconfig LIBFREEBSD
+  bool "freebsd: A C standard library"
+  default n
+  select HAVE_LIBC
+  select LIBKUALLOC
+  imply  LIBUKMMAP
+  select LIBSYSCALL_SHIM
+  select LIBVFSCORE
+  select LIBPOSIX_PROCESS
+  select LIBPOSIX_PROCESS_MULTHTHREADING
+  select LIBPOSIX_FUTEX
+  select LIBUKSCHED
+  select LIBUKSCHED_TCB_INIT
+  select LIBPOSIX_ENVIRON
+
+  # Select essential FreeBSD libc components
+  select LIBFREEBSD_STAT
+  select LIBFREEBSD_DIRENT
+  select LIBFREEBSD_TERMIOS
+  select LIBFREEBSD_LOCALE
+  select LIBFREEBSD_ERRNO
+  select LIBFREEBSD_INTERNAL
+  select LIBFREEBSD_STRING
+  select LIBFREEBSD_CTYPE
+  select LIBFREEBSD_STDLIB
+  select LIBFREEBSD_ENV
+
+  # Disable syscall wrappers to use our redirection layer
+  select LIBSYSCALL_SHIM_NOWRAPPER
+  # Select floating point support for ARM64
+  select FPSIMD if ARCH_ARM_64
+
+if LIBFREEBSD
+
+# Asynchronous I/O support
+config LIBFREEBSD_AIO
+  bool "libaio"
+  default y
+
+# Complex math library
+config LIBFREEBSD_COMPLEX
+  bool "libcomplex"
+  default n
+  select LIBCOMPILER_RT
+
+# Configuration file parsing
+config LIBFREEBSD_CONF
+  bool "libconf"
+  default y
+
+# Cryptographic functions
+config LIBFREEBSD_CRYPT
+  bool "libcrypt"
+  default y
+
+# Character type functions
+config LIBFREEBSD_CTYPE
+  bool "libctype"
+  default y
+
+# Directory entry functions
+config LIBFREEBSD_DIRENT
+  bool "libdirent"
+  default y
+
+# Environment variable functions
+config LIBFREEBSD_ENV
+  bool "libenv"
+  default y
+
+# Error number functions
+config LIBFREEBSD_ERRNO
+  bool "liberrno"
+  default y
+
+# Process exit functions
+config LIBFREEBSD_EXIT
+  bool "libexit"
+  default y
+
+# File control functions
+config LIBFREEBSD_FCNTL
+  bool "libfcntl"
+  default y
+
+# Floating-point environment functions
+config LIBFREEBSD_FENV
+  bool "libfenv"
+  default y
+
+# Internal library functions
+config LIBFREEBSD_INTERNAL
+  bool "libinternal"
+  default y
+
+# Inter-process communication
+config LIBFREEBSD_IPC
+  bool "libipc"
+  default y
+
+# Dynamic linker support
+config LIBFREEBSD_LDSO
+  bool "libldso"
+  default y
+
+# Legacy functions
+config LIBFREEBSD_LEGACY
+  bool "liblegacy"
+  default y
+
+# Linux compatibility functions
+config LIBFREEBSD_LINUX
+  bool "liblinux"
+  default y
+
+# Locale functions
+config LIBFREEBSD_LOCALE
+  bool "liblocale"
+  default y
+
+# Enable legacy locale support
+config LIBFREEBSD_LOCALE_LEGACY
+  bool "Enable legacy locales"
+  depends on LIBFREEBSD_LOCALE
+  default y
+
+# Memory allocation functions
+config LIBFREEBSD_MALLOC
+  bool "libmalloc"
+  default y
+
+# Math library
+config LIBFREEBSD_MATH
+  bool "libmath"
+  default y
+  select LIBFREEBSD_FENV
+
+# Miscellaneous functions
+config LIBFREEBSD_MISC
+  bool "libmisc"
+  default y
+
+# Memory management functions
+config LIBFREEBSD_MMAN
+  bool "libmman"
+  default y
+
+# Message queue functions
+config LIBFREEBSD_MQ
+  bool "libmq"
+  default y
+
+# Multibyte character functions
+config LIBFREEBSD_MULTIBYTE
+  bool "libmultibyte"
+  default y
+
+# Network functions
+config LIBFREEBSD_NETWORK
+  bool "libnetwork"
+  default y
+
+# Forward DNS requests to lwIP
+config LIBFREEBSD_NETWORK_LWIP_DNS
+  bool "Forward DNS requests to lwIP"
+  depends on LIBFREEBSD_NETWORK
+  depends on LIBLWIP
+  select LWIP_DNS
+  select LWIP_SOCKET
+
+# Password functions
+config LIBFREEBSD_PASSWD
+  bool "libpasswd"
+  default y
+
+# Pseudo-random number generator
+config LIBFREEBSD_PRNG
+  bool "libprng"
+  default y
+
+# Process management functions
+config LIBFREEBSD_PROCESS
+  bool "libprocess"
+  default y
+  select LIBFREEBSD_THREAD
+
+# Regular expression functions
+config LIBFREEBSD_REGEX
+  bool "libregex"
+  default y
+
+# Scheduler functions
+config LIBFREEBSD_SCHED
+  bool "libsched"
+  default y
+
+# Search functions
+config LIBFREEBSD_SEARCH
+  bool "libsearch"
+  default y
+
+# Select functions
+config LIBFREEBSD_SELECT
+  bool "libselect"
+  default y
+
+# Setjmp/longjmp functions
+config LIBFREEBSD_SETJMP
+  bool "libsetjmp"
+  default y
+
+# Signal handling functions
+config LIBFREEBSD_SIGNAL
+  bool "libsignal"
+  default y
+  select LIBUKSIGNAL
+
+# File status functions
+config LIBFREEBSD_STAT
+  bool "libstat"
+  default y
+
+# Standard I/O functions
+config LIBFREEBSD_STDIO
+  bool "libstdio"
+  default y
+  select LIBFREEBSD_FENV
+  select LIBFREEBSD_UNISTD
+  select LIBPOSIX_TTY
+  select LIBPOSIX_TTY_STDIO
+
+# Standard library functions
+config LIBFREEBSD_STDLIB
+  bool "libstdlib"
+  default y
+  select LIBFREEBSD_SIGNAL
+  select LIBFREEBSD_MULTIBYTE
+
+# String manipulation functions
+config LIBFREEBSD_STRING
+  bool "libstring"
+  default y
+
+# Temporary file functions
+config LIBFREEBSD_TEMP
+  bool "libtemp"
+  default y
+
+# Terminal I/O functions
+config LIBFREEBSD_TERMIOS
+  bool "libtermios"
+  default y
+
+# Threading functions
+config LIBFREEBSD_THREAD
+  bool "libthread"
+  default y
+  select LIBFREEBSD_SCHED
+  select LIBFREEBSD_MMAN
+
+# Enable TLS and Stack Smashing Protector (SSP) support
+config LIBFREEBSD_TLS_SSP
+  bool "Enable TLS and SSP support"
+  default y
+
+# Force enable threading if scheduler is enabled
+config LIBFREEBSD_FORCE_THREAD
+  bool
+  default y if LIBUKSCHED
+  default n
+  select LIBFREEBSD_THREAD
+
+# Time functions
+config LIBFREEBSD_TIME
+  bool "libtime"
+  default y
+
+# Standard symbolic constants and types
+config LIBFREEBSD_UNISTD
+  bool "libunistd"
+  default y
+
+endif   # closes "if LIBFREEBSD"

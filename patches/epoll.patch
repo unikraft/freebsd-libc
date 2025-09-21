@@ -1,0 +1,74 @@
+--- /dev/null
++++ b/freebsd-include/sys/epoll.h
+@@ -0,0 +1,74 @@
++/*
++ * FreeBSD sys/epoll.h stub for Unikraft
++ * 
++ * epoll is a Linux-specific interface. FreeBSD uses kqueue instead.
++ * This provides complete epoll constants for compatibility with Unikraft.
++ * 
++ * Citations: Values from Unikraft lib/nolibc/include/sys/epoll.h
++ */
++#ifndef _SYS_EPOLL_H_
++#define _SYS_EPOLL_H_
++
++#include <stdint.h>
++
++#ifndef __packed
++#define __packed __attribute__((packed))
++#endif
++
++#ifndef O_CLOEXEC
++#define O_CLOEXEC 02000000
++#endif
++
++/* Flags for epoll_create1() */
++#define EPOLL_CLOEXEC O_CLOEXEC
++
++/* Valid opcodes to issue to epoll_ctl() */
++#define EPOLL_CTL_ADD 1
++#define EPOLL_CTL_DEL 2
++#define EPOLL_CTL_MOD 3
++
++/* Epoll event masks - Citation: Unikraft lib/nolibc/include/sys/epoll.h */
++#define EPOLLIN     0x00000001  /* File descriptor is ready for read */
++#define EPOLLPRI    0x00000002  /* Exceptional condition */
++#define EPOLLOUT    0x00000004  /* File descriptor is ready for write */
++#define EPOLLRDNORM 0x00000040  /* Equivalent to POLLIN */
++#define EPOLLRDBAND 0x00000080  /* UNUSED */
++#define EPOLLWRNORM 0x00000100  /* Equivalent to POLLOUT */
++#define EPOLLWRBAND 0x00000200  /* UNUSED */
++#define EPOLLMSG    0x00000400  /* UNUSED */
++#define EPOLLRDHUP  0x00002000  /* Stream peer closed connection */
++
++/* These events are set if they occur regardless of whether requested */
++#define EPOLLERR    0x00000008  /* Error condition */
++#define EPOLLHUP    0x00000010  /* Peer closed its end of channel */
++#define EPOLLNVAL   0x00000020  /* Invalid request: fd not open */
++
++/* Additional epoll flags */
++#define EPOLLEXCLUSIVE  (1U << 28)  /* Set exclusive wakeup mode for fd */
++#define EPOLLWAKEUP     (1U << 29)
++#define EPOLLONESHOT    (1U << 30)  /* Set one-shot behavior for fd */
++#define EPOLLET         (1U << 31)  /* Set edge-triggered behavior for fd */
++
++typedef union epoll_data {
++    void *ptr;
++    int fd;
++    uint32_t u32;
++    uint64_t u64;
++} epoll_data_t;
++
++struct epoll_event {
++    uint32_t events;        /* Epoll events */
++    epoll_data_t data;      /* User data variable */
++} __packed;
++
++/* Function declarations - Citation: Unikraft lib/nolibc/include/sys/epoll.h */
++int epoll_create(int size);
++int epoll_create1(int flags);
++int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
++int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
++
++#endif /* _SYS_EPOLL_H_ */
++

@@ -1,0 +1,38 @@
+--- /tmp/termios.h.orig	2025-09-21 06:00:15.474620642 +0530
++++ /tmp/termios.h.modified	2025-09-21 06:00:15.477620669 +0530
+@@ -2,3 +2,35 @@
+ #warning "this file includes <sys/termios.h> which is deprecated, use <termios.h> instead"
+ #endif
+ #include <termios.h>
++
++/* Essential termios constants for Unikraft compatibility */
++#ifndef NCCS
++#define NCCS        20      /* Number of control characters */
++#endif
++#ifndef _POSIX_VDISABLE  
++#define _POSIX_VDISABLE 0   /* Disabled control character */
++#endif
++
++/* Additional terminal constants */
++#ifndef VINTR
++#define VINTR       0   /* Interrupt character */
++#endif
++#ifndef VQUIT
++#define VQUIT       1   /* Quit character */
++#endif
++#ifndef VERASE
++#define VERASE      2   /* Erase character */
++#endif
++#ifndef VKILL
++#define VKILL       3   /* Kill character */
++#endif
++#ifndef VSTART
++#define VSTART      8   /* Start character */
++#endif
++#ifndef VSTOP
++#define VSTOP       9   /* Stop character */
++#endif
++#ifndef VSUSP
++#define VSUSP       10  /* Suspend character */
++#endif
++

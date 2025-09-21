@@ -1,0 +1,19 @@
+--- /tmp/termios.h.orig	2025-09-21 06:01:10.527108606 +0530
++++ /tmp/termios.h.modified	2025-09-21 06:01:10.530108632 +0530
+@@ -1,4 +1,12 @@
+-#ifdef __GNUC__
+-#warning "this file includes <sys/termios.h> which is deprecated, use <termios.h> instead"
+-#endif
+-#include <termios.h>
++/*
++ * FreeBSD termios.h wrapper for Unikraft
++ */
++#ifndef _TERMIOS_H_
++#define _TERMIOS_H_
++
++#include <sys/types.h>
++#include <sys/_termios.h>
++#include <sys/termios.h>
++
++#endif /* _TERMIOS_H_ */
++
