@@ -1,0 +1,12 @@
+--- a/freebsd-include/sys/fcntl.h
++++ b/freebsd-include/sys/fcntl.h
+@@ -422,6 +422,9 @@
+ #define	O_EXEC		0x00040000	/* Open for execute only */
+ #define	O_VERIFY	0x00080000	/* open only after verification */
+ 
++#define O_ACCMODE	(O_RDONLY|O_WRONLY|O_RDWR)
++
++
+ /*
+  * XXX missing O_RSYNC, O_DSYNC.
+  */

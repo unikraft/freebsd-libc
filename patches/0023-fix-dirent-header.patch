@@ -1,0 +1,18 @@
+--- /tmp/dirent.h.orig	2025-09-21 05:54:21.216234905 +0530
++++ /tmp/dirent.h.modified	2025-09-21 05:54:21.219234935 +0530
+@@ -158,3 +158,15 @@
+ #endif /* !_KERNEL */
+ 
+ #endif /* !_DIRENT_H_ */
++
++/* Linux compatibility */
++#ifndef _DIRENT64_DEFINED
++#define _DIRENT64_DEFINED
++struct dirent64 {
++    ino_t d_ino;
++    off_t d_off;
++    unsigned short d_reclen;
++    unsigned char d_type;
++    char d_name[];
++};
++#endif

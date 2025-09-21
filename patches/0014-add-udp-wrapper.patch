@@ -1,0 +1,55 @@
+--- a/freebsd-include/netinet/udp.h
++++ b/freebsd-include/netinet/udp.h
+@@ -1,10 +1,10 @@
+ /*-
+- * SPDX-License-Identifier: BSD-3-Clause
++ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+  *
+  * Copyright (c) 1982, 1986, 1993
+  *	The Regents of the University of California.  All rights reserved.
+  *
+- * Redistribution and use in source and binary forms, with or without
++ * Redistribution and use in source and binary forms, with or without 
+  * modification, are permitted provided that the following conditions
+  * are met:
+  * 1. Redistributions of source code must retain the above copyright
+@@ -12,9 +12,6 @@
+  * 2. Redistributions in binary form must reproduce the above copyright
+  *    notice, this list of conditions and the following disclaimer in the
+  *    documentation and/or other materials provided with the distribution.
+- * 3. Neither the name of the University nor the names of its contributors
+- *    may be used to endorse or promote products derived from this software
+- *    without specific prior written permission.
+  *
+  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+@@ -27,21 +24,10 @@
+  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+- *
+- *	@(#)udp.h	8.1 (Berkeley) 6/10/93
+- * $FreeBSD$
+  */
+ 
+-#ifndef _NETINET_UDP_H_
+-#define _NETINET_UDP_H_
+-
+-#ifndef _SYS_CDEFS_H_
+-#error this file includes <sys/cdefs.h>
+-#endif
+-
+-#ifndef _SYS_TYPES_H_
+-#include <sys/types.h>
+-#endif
++#ifndef _NETINET_UDP_H
++#define _NETINET_UDP_H
+ 
+ struct udphdr {
+ 	u_short	uh_sport;		/* source port */
+@@ -50,4 +36,4 @@
+ 	u_short	uh_sum;			/* udp checksum */
+ };
+ 
+-#endif
++#endif /* _NETINET_UDP_H */

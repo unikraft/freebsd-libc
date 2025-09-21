@@ -1,0 +1,35 @@
+--- /tmp/poll.h.orig	2025-09-21 05:48:01.930799886 +0530
++++ /tmp/poll.h.modified	2025-09-21 05:49:32.777974651 +0530
+@@ -62,14 +62,14 @@
+ #define	POLLPRI		0x0002		/* OOB/Urgent readable data */
+ #define	POLLOUT		0x0004		/* file descriptor is writeable */
+ #define	POLLRDNORM	0x0040		/* non-OOB/URG data available */
+-#define	POLLWRNORM	POLLOUT		/* no write type differentiation */
++#define	POLLWRNORM	0x0100		/* normal data may be written (Linux compat) */
+ #define	POLLRDBAND	0x0080		/* OOB/Urgent readable data */
+-#define	POLLWRBAND	0x0100		/* OOB/Urgent data can be written */
++#define	POLLWRBAND	0x0200		/* priority data may be written (Linux compat) */
+ 
+ #if __BSD_VISIBLE
+ /* General FreeBSD extension (currently only supported for sockets): */
+ #define	POLLINIGNEOF	0x2000		/* like POLLIN, except ignore EOF */
+-#define	POLLRDHUP	0x4000		/* half shut down */
++#define	POLLRDHUP	0x2000		/* half shut down (Unikraft compatible) */
+ #endif
+ 
+ /*
+@@ -125,3 +125,14 @@
+ #endif /* !_KERNEL */
+ 
+ #endif /* !_SYS_POLL_H_ */
++
++/* SEEK constants for Unikraft compatibility - ensure they're available in poll operations */
++#ifndef SEEK_SET
++#define SEEK_SET    0   /* set file offset to offset */
++#define SEEK_CUR    1   /* set file offset to current plus offset */
++#define SEEK_END    2   /* set file offset to EOF plus offset */
++#endif
++
++/* O_* constants for Unikraft compatibility - include fcntl.h */
++#include <sys/fcntl.h>
++
