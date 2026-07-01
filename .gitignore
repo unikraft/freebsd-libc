@@ -1,0 +1,9 @@
+15.0.zip
+.config
+
+# fetched sources and build outputs
+origin/
+build/
+
+# editor/backup files
+*.old
