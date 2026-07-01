@@ -1,0 +1,431 @@
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Unikraft port of FreeBSD's libc (string, stdlib, gdtoa, stdio).
+
+LIBFREEBSD_LIBC_VERSION ?= releng-15.0
+LIBFREEBSD_LIBC_URL ?= https://github.com/PetruCristian/fork-freebsd-libc/archive/refs/heads/releng/15.0.zip
+LIBFREEBSD_LIBC_SUBDIR ?= fork-freebsd-libc-$(LIBFREEBSD_LIBC_VERSION)
+LIBFREEBSD_LIBC_PATCHDIR ?= $(LIBFREEBSD_LIBC_BASE)/patches
+
+$(eval $(call addlib_s,libfreebsd_libc,$(CONFIG_LIBFREEBSD_LIBC)))
+$(eval $(call fetch,libfreebsd_libc,$(LIBFREEBSD_LIBC_URL)))
+$(eval $(call patch,libfreebsd_libc,$(LIBFREEBSD_LIBC_PATCHDIR),$(LIBFREEBSD_LIBC_SUBDIR)))
+
+LIBFREEBSD_LIBC_SRC := $(LIBFREEBSD_LIBC_ORIGIN)/$(LIBFREEBSD_LIBC_SUBDIR)/lib/libc
+
+################################################################################
+# Global include paths
+################################################################################
+# Our overlay headers first, then nolibc's.
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(LIBFREEBSD_LIBC_BASE)/include
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(CONFIG_UK_BASE)/lib/nolibc/include
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(CONFIG_UK_BASE)/lib/nolibc/arch/$(ARCH)
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(CONFIG_UK_BASE)/lib/nolibc/musl-imported/include
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(CONFIG_UK_BASE)/lib/nolibc/musl-imported/arch/generic
+LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y += -I$(CONFIG_UK_BASE)/lib/nolibc/musl-imported/arch/$(ARCH)
+
+CINCLUDES-$(CONFIG_LIBFREEBSD_LIBC)   += $(LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y)
+CXXINCLUDES-$(CONFIG_LIBFREEBSD_LIBC) += $(LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y)
+
+# Alias used by apps' Makefile.uk
+LIBFREEBSD_LIBC_COMMON_INCLUDES = $(LIBFREEBSD_LIBC_GLOBAL_INCLUDES-y)
+
+# Defaults for the nolibc header config knobs (LIBNOLIBC is gated off).
+CFLAGS-$(CONFIG_LIBFREEBSD_LIBC)   += -DCONFIG_LIBNOLIBC_FD_SETSIZE=1024
+CXXFLAGS-$(CONFIG_LIBFREEBSD_LIBC) += -DCONFIG_LIBNOLIBC_FD_SETSIZE=1024
+ASFLAGS-$(CONFIG_LIBFREEBSD_LIBC)  += -DCONFIG_LIBNOLIBC_FD_SETSIZE=1024
+CFLAGS-$(CONFIG_LIBFREEBSD_LIBC)   += -DCONFIG_LIBNOLIBC_UKDEBUG_ASSERT=1
+CXXFLAGS-$(CONFIG_LIBFREEBSD_LIBC) += -DCONFIG_LIBNOLIBC_UKDEBUG_ASSERT=1
+
+# Suppress noisy warnings from FreeBSD sources.
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-unused-parameter
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-unused-but-set-variable
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-sign-compare
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-implicit-fallthrough
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-pointer-sign
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-missing-prototypes
+LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y += -Wno-old-style-definition
+LIBFREEBSD_LIBC_CFLAGS-y += $(LIBFREEBSD_LIBC_SUPPRESS_FLAGS-y)
+
+# Force-include our minimal sys/cdefs.h before every TU.
+LIBFREEBSD_LIBC_CFLAGS-y += -include $(LIBFREEBSD_LIBC_BASE)/include/sys/cdefs.h
+
+################################################################################
+# OS-interface implementations: reused from nolibc
+################################################################################
+# nolibc is gated off, so compile its sources here; the |tag namespaces them.
+NOLIBC_SRC := $(CONFIG_UK_BASE)/lib/nolibc
+
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/errno.c|libfreebsd_libc
+# Editable copy of nolibc's stdlib.c; parsing fns guarded out (see below).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_BASE)/glue/stdlib_nolibc.c
+# Single-threaded pthread TLS backing for OpenSSL (see include/pthread.h).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_BASE)/glue/pthread_shim.c
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/ctype.c|libfreebsd_libc
+# qsort now comes from FreeBSD libc (see stdlib section below).
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/random.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/h_errno.c|libfreebsd_libc
+
+# nolibc stdio is used only when the FreeBSD stdio port is OFF.
+ifneq ($(CONFIG_LIBFREEBSD_LIBC_STDIO),y)
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/stdio.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/asprintf.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/scanf.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/sscanf.c|libfreebsd_libc
+endif
+
+# musl-imported helpers used by nolibc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/string/strsignal.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/signal/psignal.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/time/__month_to_secs.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/time/__secs_to_tm.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/time/timegm.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/time/__tm_to_secs.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/time/__year_to_secs.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/network/htonl.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/network/ntohl.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/network/htons.c|libfreebsd_libc
+LIBFREEBSD_LIBC_SRCS-y += $(NOLIBC_SRC)/musl-imported/src/network/ntohs.c|libfreebsd_libc
+
+################################################################################
+# String functions
+################################################################################
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlen.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strnlen.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcmp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncmp.c
+# strcasecmp/strncasecmp: ASCII-only versions in glue (avoid xlocale).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlcpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/stpcpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/stpncpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcat.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strncat.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strlcat.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strchr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strrchr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strchrnul.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strstr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strnstr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strspn.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strcspn.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strpbrk.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strsep.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strtok.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strdup.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/strndup.c
+# strerror: replacement in glue (avoids libssp).
+
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memchr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memrchr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memmem.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memccpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bcmp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/ffs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/ffsl.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/ffsll.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/fls.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/flsl.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/flsll.c
+
+# memcpy.c and memmove.c #include bcopy.c with MEMCOPY/MEMMOVE defined.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bcopy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memcpy.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memmove.c
+
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memcmp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/memset.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/string/bzero.c
+
+################################################################################
+# stdlib (FreeBSD) - trivial drop-ins
+################################################################################
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/abs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/labs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/llabs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/div.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/ldiv.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/lldiv.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/imaxabs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/imaxdiv.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtonum.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/reallocarray.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/reallocf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/bsearch.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/heapsort.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/qsort.c
+
+################################################################################
+# stdlib (FreeBSD) - atoi + strtol family (needs xlocale shims)
+################################################################################
+# xlocale shims let these compile; their entry points replace the nolibc copies.
+LIBFREEBSD_LIBC_CFLAGS-y += -DLIBFREEBSD_LIBC_USE_FREEBSD_STDLIB
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/atoi.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/atol.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/atoll.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtol.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtoul.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtoll.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtoull.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtoimax.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtoumax.c
+
+################################################################################
+# stdlib (FreeBSD) - getopt / getopt_long
+################################################################################
+# Shares nolibc's <getopt.h>; errors via _getprogname()/warnx() glue.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/getopt.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/getopt_long.c
+
+################################################################################
+# gen (FreeBSD) - err(3) family
+################################################################################
+# err/errx/warn/warnx; replaces the old warnx glue stub.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/err.c
+
+################################################################################
+# gen (FreeBSD) - fnmatch
+################################################################################
+# Collation-aware fnmatch; C-locale shims cover wchar/collate.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/fnmatch.c
+
+################################################################################
+# gen (FreeBSD) - glob
+################################################################################
+# Walks the FS via vfscore opendir/readdir; small C-locale glue deps.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/glob.c
+
+################################################################################
+# gen (FreeBSD) - basename / dirname
+################################################################################
+# POSIX.1-2008 in-place variants; deps: <libgen.h> overlay + <string.h>.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/basename.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/dirname.c
+
+################################################################################
+# gen (FreeBSD) - getprogname / setprogname
+################################################################################
+# Retires the old glue _getprogname stub; __progname lives in glue/stubs.c.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/getprogname.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/setprogname.c
+
+################################################################################
+# gen (FreeBSD) - rand48(3) PRNG family
+################################################################################
+# 48-bit LCG; pure arithmetic. Prototypes in the <stdlib.h> overlay.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/_rand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/drand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/erand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/jrand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/lcong48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/lrand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/mrand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/nrand48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/seed48.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/srand48.c
+
+################################################################################
+# gen (FreeBSD) - fmtcheck / getbsize / stringlist / fmtmsg
+################################################################################
+# Self-contained; stringlist/fmtmsg add one overlay header each.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/fmtcheck.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/getbsize.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/stringlist.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gen/fmtmsg.c
+
+################################################################################
+# setjmp / longjmp (FreeBSD amd64)
+################################################################################
+# amd64 _setjmp.S (no signal mask) + glue aliases for setjmp/longjmp. Needed by
+# pthread-embedded. amd64 only; .S uses ASINCLUDES for <machine/asm.h>.
+ifeq ($(ARCH),x86_64)
+LIBFREEBSD_LIBC_ASINCLUDES-y += -I$(LIBFREEBSD_LIBC_BASE)/include
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/amd64/gen/_setjmp.S
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_BASE)/glue/setjmp_alias.S
+endif
+
+################################################################################
+# gdtoa (FreeBSD) - real strtod / strtof
+################################################################################
+# Needs -I gdtoa, the arch arith.h/gd_qnan.h, and -fno-strict-aliasing.
+LIBFREEBSD_LIBC_GDTOA := $(LIBFREEBSD_LIBC_ORIGIN)/$(LIBFREEBSD_LIBC_SUBDIR)/contrib/gdtoa
+
+ifeq ($(ARCH),arm64)
+LIBFREEBSD_LIBC_GDTOA_ARCH := aarch64
+else
+LIBFREEBSD_LIBC_GDTOA_ARCH := amd64
+endif
+
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_GDTOA)
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/$(LIBFREEBSD_LIBC_GDTOA_ARCH)
+LIBFREEBSD_LIBC_CFLAGS-y += -fno-strict-aliasing
+
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/dmisc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/dtoa.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/gdtoa.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/gethex.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/gmisc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/hd_init.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/hexnan.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/misc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/smisc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/strtod.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/strtodg.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/strtof.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/strtord.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/sum.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/ulp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gdtoa/glue.c
+# Number->string side (dtoa): shortest round-trip float formatter.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/g__fmt.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/g_dfmt.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/g_ffmt.c
+
+################################################################################
+# strtold - real long-double parse
+################################################################################
+# amd64 80-bit: strtold -> machdep_ldisx -> strtorx (reuses strtodg core).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdlib/strtold.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gdtoa/machdep_ldisx.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_GDTOA)/strtorx.c
+
+################################################################################
+# stdtime (FreeBSD) - strftime
+################################################################################
+# timelocal.c is NOT built (it needs the xlocale runtime); glue supplies
+# __get_current_time_locale + a C-locale table and a fixed-UTC tzset.
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/stdtime
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_ORIGIN)/$(LIBFREEBSD_LIBC_SUBDIR)/contrib/tzcode
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/stdtime/strftime.c
+
+################################################################################
+# regex (FreeBSD) - POSIX regular expressions
+################################################################################
+# engine.c is #included by regexec.c, so it is not listed in SRCS.
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/regex
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/regex/regcomp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/regex/regexec.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/regex/regerror.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/regex/regfree.c
+
+################################################################################
+# inet (FreeBSD) - IPv4/IPv6 address <-> text conversion
+################################################################################
+# Pure address-format routines (no syscalls). Overlays: arpa/inet.h,
+# arpa/nameser.h.
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/include
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_addr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_ntoa.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_ntop.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_pton.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_network.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_lnaof.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_makeaddr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_netof.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_neta.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_net_ntop.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_net_pton.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_cidr_ntop.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/inet_cidr_pton.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/inet/nsap_addr.c
+
+################################################################################
+# stdio (FreeBSD) - FILE machinery + write/read paths + formatters (GATED)
+################################################################################
+# Gated behind CONFIG_LIBFREEBSD_LIBC_STDIO (default n). With it on, the overlay
+# include/stdio.h switches FILE to struct __sFILE image-wide.
+LIBFREEBSD_LIBC_STDIO_SRC := $(LIBFREEBSD_LIBC_SRC)/stdio
+
+ifeq ($(CONFIG_LIBFREEBSD_LIBC_STDIO),y)
+# stdio-internal headers live next to the sources.
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_STDIO_SRC)
+# lib/libc/include for fpmath.h; our overlay stays earlier on the path.
+LIBFREEBSD_LIBC_CFLAGS-y += -I$(LIBFREEBSD_LIBC_SRC)/include
+
+# FILE machinery (FILE pool, std streams, __s{read,write,seek,close})
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/findfp.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/stdio.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/flags.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/makebuf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fwalk.c
+# FILE locking: under PTE use glue no-op locks (upstream _flock_stub can't
+# compile against a struct pthread_t); stdio runs with __isthreaded == 0.
+ifeq ($(CONFIG_LIBPTHREAD_EMBEDDED),y)
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_BASE)/glue/flockfile_pte.c
+else
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/_flock_stub.c
+endif
+
+# Write path
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fvwrite.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/wbuf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/wsetup.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fwrite.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fputs.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fputc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/putc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/putchar.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/puts.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fflush.c
+
+# Formatters (vfprintf is the centerpiece; its float path uses gdtoa)
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vfprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/printf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/snprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vsnprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/sprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vsprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/asprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vasprintf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/printf-pos.c
+
+# Status / util
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/feof.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/ferror.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/clrerr.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fileno.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fpurge.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/setvbuf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/setbuf.c
+# perror prints via _writev (glue fans it out over _write -> console).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/perror.c
+
+# %a / %La / %Lf need gdtoa's hex/long-double dtoa helpers.
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gdtoa/_hdtoa.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gdtoa/_hldtoa.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_SRC)/gdtoa/_ldtoa.c
+
+# Read path + scanf core
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/refill.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/rget.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fgetc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/getc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/getchar.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fgets.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fread.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/ungetc.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vfscanf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/sscanf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vsscanf.c
+# Remaining scanf siblings + getline/getdelim (thin wrappers).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/scanf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fscanf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/vscanf.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/getdelim.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/getline.c
+
+# File ops trimmed to SQLite's link set (fopen/fclose/fseek/ftell/rewind).
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fopen.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fclose.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/fseek.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/ftell.c
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_STDIO_SRC)/rewind.c
+endif
+
+################################################################################
+# Local glue (stubs for getenv, math; strtod now real via gdtoa)
+################################################################################
+LIBFREEBSD_LIBC_SRCS-y += $(LIBFREEBSD_LIBC_BASE)/glue/stubs.c

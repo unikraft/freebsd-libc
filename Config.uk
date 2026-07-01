@@ -1,0 +1,23 @@
+config LIBFREEBSD_LIBC
+    bool "FreeBSD libc"
+    default y
+    select HAVE_LIBC
+
+if LIBFREEBSD_LIBC
+
+config LIBFREEBSD_LIBC_STDIO
+    bool "Use FreeBSD stdio (lib/libc/stdio) instead of nolibc's"
+    default n
+    help
+      Replace nolibc's small FILE-based stdio with FreeBSD libc's real
+      stdio subsystem (struct __sFILE, vfprintf, the FILE* state machine).
+
+      This is an ATOMIC CUTOVER: FILE is a viral type, so turning this on
+      switches every translation unit (app + glue) to FreeBSD's __sFILE at
+      once and drags in vfprintf. The build is expected to be red mid-port
+      until the minimal stdio set links.
+
+      Leave this n (the default) for today's known-good nolibc stdio path,
+      which stays fully selectable. Only set y when working the stdio port.
+
+endif

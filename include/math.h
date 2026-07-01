@@ -1,0 +1,90 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Minimal math.h for SQLite (nolibc ships none). The functions are stubbed in
+ * glue/stubs.c - enough to link with floating point on, but not accurate.
+ * Replace with a real libm (musl's, openlibm) for real work.
+ */
+#ifndef _MATH_FREEBSDPORT_H_
+#define _MATH_FREEBSDPORT_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define HUGE_VAL  __builtin_huge_val()
+#define HUGE_VALF __builtin_huge_valf()
+#define HUGE_VALL __builtin_huge_vall()
+#define INFINITY  __builtin_inff()
+#define NAN       __builtin_nanf("")
+
+#define FP_NAN       0
+#define FP_INFINITE  1
+#define FP_ZERO      2
+#define FP_SUBNORMAL 3
+#define FP_NORMAL    4
+
+#define M_E        2.7182818284590452354
+#define M_LOG2E    1.4426950408889634074
+#define M_LOG10E   0.43429448190325182765
+#define M_LN2      0.69314718055994530942
+#define M_LN10     2.30258509299404568402
+#define M_PI       3.14159265358979323846
+#define M_PI_2     1.57079632679489661923
+#define M_PI_4     0.78539816339744830962
+#define M_1_PI     0.31830988618379067154
+#define M_2_PI     0.63661977236758134308
+#define M_2_SQRTPI 1.12837916709551257390
+#define M_SQRT2    1.41421356237309504880
+#define M_SQRT1_2  0.70710678118654752440
+
+#define isnan(x)    __builtin_isnan(x)
+#define isinf(x)    __builtin_isinf_sign(x)
+#define isfinite(x) __builtin_isfinite(x)
+#define signbit(x)  __builtin_signbit(x)
+
+/* fpclassify + its FP_* result codes. gdtoa's _hdtoa/_hldtoa/_ldtoa (the
+ * %a / %La / long-double formatting helpers) call fpclassify; without the
+ * macro the compiler emits a call to an extern `fpclassify` that nothing
+ * defines. Route it to the GCC builtin instead. */
+#ifndef FP_NAN
+#define FP_NAN       0
+#define FP_INFINITE  1
+#define FP_ZERO      2
+#define FP_SUBNORMAL 3
+#define FP_NORMAL    4
+#endif
+#ifndef fpclassify
+#define fpclassify(x) \
+	__builtin_fpclassify(FP_NAN, FP_INFINITE, FP_NORMAL, FP_SUBNORMAL, FP_ZERO, x)
+#endif
+
+double sqrt(double);
+double pow(double, double);
+double log(double);
+double log10(double);
+double exp(double);
+double sin(double);
+double cos(double);
+double tan(double);
+double asin(double);
+double acos(double);
+double atan(double);
+double atan2(double, double);
+double sinh(double);
+double cosh(double);
+double tanh(double);
+double floor(double);
+double ceil(double);
+double fmod(double, double);
+double fabs(double);
+double modf(double, double *);
+double ldexp(double, int);
+double frexp(double, int *);
+double trunc(double);
+double round(double);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _MATH_FREEBSDPORT_H_ */
